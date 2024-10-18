@@ -7,7 +7,9 @@ export const Route = createFileRoute("/$projectId")({
 
 type ProjectResponse = {
   project: {
+    title: string;
     columns: {
+      title: string;
       id: string;
       tasks: {
         id: string;
@@ -19,11 +21,13 @@ type ProjectResponse = {
 
 function ProjectComponent() {
   const { projectId } = Route.useParams();
-  const project = useQuery<ProjectResponse>(
+  const { data, error, loading } = useQuery<ProjectResponse>(
     gql`
       query GetProject($projectId: ID!) {
         project(id: $projectId) {
+          title
           columns {
+            title
             id
             tasks {
               id
@@ -40,21 +44,40 @@ function ProjectComponent() {
     }
   );
 
+  if (loading) {
+    return <div>loading...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error.message}</div>;
+  }
+
   return (
     <div>
-      <h1>Project: {projectId}</h1>
-      <ul>
-        {project.data?.project.columns.map((column) => (
-          <li key={column.id}>
-            <h2>{column.id}</h2>
-            <ul>
-              {column.tasks.map((task) => (
-                <li key={task.id}>{task.title}</li>
-              ))}
-            </ul>
-          </li>
-        ))}
-      </ul>
+      {data ? (
+        <>
+          <h1>Project: {data.project.title}</h1>
+          <ul className="grid grid-cols-3 gap-4">
+            {data.project.columns.map((column) => (
+              <li key={column.id} className="bg-gray-200 p-4 rounded-lg">
+                <ul className="flex flex-col gap-2">
+                  <li className="font-bold">{column.title}</li>
+                  {column.tasks.map((task) => (
+                    <li
+                      className="border shadow-md bg-white rounded-lg p-2"
+                      key={task.id}
+                    >
+                      {task.title}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <div>No data</div>
+      )}
     </div>
   );
 }
