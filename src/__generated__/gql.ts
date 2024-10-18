@@ -15,7 +15,7 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  */
 const documents = {
     "\n  query GetProjects {\n    projects {\n      id\n      title\n      __typename\n    }\n  }\n": types.GetProjectsDocument,
-    "\n      query GetProject($projectId: ID!) {\n        project(id: $projectId) {\n          title\n          columns {\n            title\n            id\n            tasks {\n              id\n              title\n            }\n          }\n        }\n      }\n    ": types.GetProjectDocument,
+    "\n  query GetProject($projectId: ID!) {\n    project(id: $projectId) {\n      title\n      columns {\n        title\n        id\n        tasks {\n          id\n          title\n          position\n        }\n      }\n    }\n  }\n": types.GetProjectDocument,
 };
 
 /**
@@ -39,7 +39,7 @@ export function gql(source: "\n  query GetProjects {\n    projects {\n      id\n
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(source: "\n      query GetProject($projectId: ID!) {\n        project(id: $projectId) {\n          title\n          columns {\n            title\n            id\n            tasks {\n              id\n              title\n            }\n          }\n        }\n      }\n    "): (typeof documents)["\n      query GetProject($projectId: ID!) {\n        project(id: $projectId) {\n          title\n          columns {\n            title\n            id\n            tasks {\n              id\n              title\n            }\n          }\n        }\n      }\n    "];
+export function gql(source: "\n  query GetProject($projectId: ID!) {\n    project(id: $projectId) {\n      title\n      columns {\n        title\n        id\n        tasks {\n          id\n          title\n          position\n        }\n      }\n    }\n  }\n"): (typeof documents)["\n  query GetProject($projectId: ID!) {\n    project(id: $projectId) {\n      title\n      columns {\n        title\n        id\n        tasks {\n          id\n          title\n          position\n        }\n      }\n    }\n  }\n"];
 
 export function gql(source: string) {
   return (documents as any)[source] ?? {};

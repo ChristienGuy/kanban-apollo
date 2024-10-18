@@ -9,3 +9,20 @@ export const GET_PROJECTS = gql(`
     }
   }
 `);
+
+export const GET_PROJECT = gql(`
+  query GetProject($projectId: ID!) {
+    project(id: $projectId) {
+      title
+      columns {
+        title
+        id
+        tasks {
+          id
+          title
+          position
+        }
+      }
+    }
+  }
+`);
