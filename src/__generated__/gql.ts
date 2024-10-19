@@ -14,8 +14,9 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 const documents = {
-    "\n  query GetProjects {\n    projects {\n      id\n      title\n      __typename\n    }\n  }\n": types.GetProjectsDocument,
-    "\n  query GetProject($projectId: ID!) {\n    project(id: $projectId) {\n      title\n      columns {\n        title\n        id\n        tasks {\n          id\n          title\n          position\n        }\n      }\n    }\n  }\n": types.GetProjectDocument,
+    "\n  query GetProjects {\n    projects {\n      __typename\n      id\n      title\n      columns {\n        id\n      }\n    }\n  }\n": types.GetProjectsDocument,
+    "\n  query GetProject($projectId: ID!) {\n    project(id: $projectId) {\n      __typename\n      title\n      columns {\n        __typename\n        title\n        id\n        position\n        project {\n          id\n          __typename\n        }\n        tasks {\n          __typename\n          id\n          title\n          position\n          column {\n            __typename\n            id\n          }\n        }\n      }\n    }\n  }\n": types.GetProjectDocument,
+    "\n    mutation UpdateTask($updateTaskId: String!, $position: String, $title: String, $columnId: String) {\n      updateTask(id: $updateTaskId, position: $position, title: $title, columnId: $columnId) {\n        __typename\n        id\n        position\n        column {\n          __typename\n          id\n          project {\n            __typename\n            id\n          }\n        }\n      }\n    }": types.UpdateTaskDocument,
 };
 
 /**
@@ -35,11 +36,15 @@ export function gql(source: string): unknown;
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(source: "\n  query GetProjects {\n    projects {\n      id\n      title\n      __typename\n    }\n  }\n"): (typeof documents)["\n  query GetProjects {\n    projects {\n      id\n      title\n      __typename\n    }\n  }\n"];
+export function gql(source: "\n  query GetProjects {\n    projects {\n      __typename\n      id\n      title\n      columns {\n        id\n      }\n    }\n  }\n"): (typeof documents)["\n  query GetProjects {\n    projects {\n      __typename\n      id\n      title\n      columns {\n        id\n      }\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(source: "\n  query GetProject($projectId: ID!) {\n    project(id: $projectId) {\n      title\n      columns {\n        title\n        id\n        tasks {\n          id\n          title\n          position\n        }\n      }\n    }\n  }\n"): (typeof documents)["\n  query GetProject($projectId: ID!) {\n    project(id: $projectId) {\n      title\n      columns {\n        title\n        id\n        tasks {\n          id\n          title\n          position\n        }\n      }\n    }\n  }\n"];
+export function gql(source: "\n  query GetProject($projectId: ID!) {\n    project(id: $projectId) {\n      __typename\n      title\n      columns {\n        __typename\n        title\n        id\n        position\n        project {\n          id\n          __typename\n        }\n        tasks {\n          __typename\n          id\n          title\n          position\n          column {\n            __typename\n            id\n          }\n        }\n      }\n    }\n  }\n"): (typeof documents)["\n  query GetProject($projectId: ID!) {\n    project(id: $projectId) {\n      __typename\n      title\n      columns {\n        __typename\n        title\n        id\n        position\n        project {\n          id\n          __typename\n        }\n        tasks {\n          __typename\n          id\n          title\n          position\n          column {\n            __typename\n            id\n          }\n        }\n      }\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n    mutation UpdateTask($updateTaskId: String!, $position: String, $title: String, $columnId: String) {\n      updateTask(id: $updateTaskId, position: $position, title: $title, columnId: $columnId) {\n        __typename\n        id\n        position\n        column {\n          __typename\n          id\n          project {\n            __typename\n            id\n          }\n        }\n      }\n    }"): (typeof documents)["\n    mutation UpdateTask($updateTaskId: String!, $position: String, $title: String, $columnId: String) {\n      updateTask(id: $updateTaskId, position: $position, title: $title, columnId: $columnId) {\n        __typename\n        id\n        position\n        column {\n          __typename\n          id\n          project {\n            __typename\n            id\n          }\n        }\n      }\n    }"];
 
 export function gql(source: string) {
   return (documents as any)[source] ?? {};
