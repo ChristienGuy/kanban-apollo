@@ -8,6 +8,7 @@ import {
 } from "@apollo/client";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
+import { persistCache, LocalStorageWrapper } from "apollo3-cache-persist";
 
 import { routeTree } from "./routeTree.gen.ts";
 import "./index.css";
@@ -22,8 +23,15 @@ const link = createHttpLink({
   uri: "http://localhost:4000",
   credentials: "include",
 });
+const cache = new InMemoryCache();
+
+await persistCache({
+  cache,
+  storage: new LocalStorageWrapper(window.localStorage),
+});
+
 const client = new ApolloClient({
-  cache: new InMemoryCache(),
+  cache,
   link,
 });
 
@@ -41,5 +49,5 @@ createRoot(document.getElementById("root")!).render(
         <RouterProvider router={router} />
       </ApolloProvider>
     </ClerkProvider>
-  </StrictMode>
+  </StrictMode>,
 );

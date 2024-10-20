@@ -1,4 +1,7 @@
 import { useMutation, useQuery } from "@apollo/client";
+
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   DragDropContext,
@@ -18,8 +21,26 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
+  ContextMenuItem,
 } from "@/components/ui/context-menu";
-import { ContextMenuItem } from "@radix-ui/react-context-menu";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTrigger,
+  DialogContent,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { useForm } from "react-hook-form";
+import { DialogTitle } from "@radix-ui/react-dialog";
+import { useState } from "react";
 
 enum DROPPABLE_TYPE {
   COLUMN = "COLUMN",
@@ -40,7 +61,10 @@ function sortByPosition<T extends { position: string }>(a: T, b: T) {
   return 0;
 }
 
-const getSortedColumns = (columns: GetProjectQuery["project"]["columns"]) => {
+type Column = GetProjectQuery["project"]["columns"][number];
+type Task = Column["tasks"][number];
+
+const getSortedColumns = (columns: Column[]) => {
   const sortedColumns = [...columns].sort(sortByPosition);
   return sortedColumns.map((column) => {
     const sortedTasks = [...column.tasks].sort(sortByPosition);
@@ -51,13 +75,7 @@ const getSortedColumns = (columns: GetProjectQuery["project"]["columns"]) => {
   });
 };
 
-function Task({
-  task,
-  className,
-}: {
-  task: GetProjectQuery["project"]["columns"][number]["tasks"][number];
-  className?: string;
-}) {
+function Task({ task, className }: { task: Task; className?: string }) {
   const [deleteTask] = useMutation(
     gql(`
     mutation DeleteTask($taskId: String!) {
@@ -105,15 +123,13 @@ function Task({
   );
 }
 
-function Column({
-  column,
-  index,
-  className,
-}: {
-  column: GetProjectQuery["project"]["columns"][number];
-  index: number;
-  className?: string;
-}) {
+const addTaskSchema = z.object({
+  title: z.string().min(1),
+});
+
+function AddTaskModal({ column }: { column: Column }) {
+  const [open, setIsOpen] = useState(false);
+
   const [addTask] = useMutation(
     gql(`
     mutation AddTask($columnId: String!, $title: String!, $position: String!) {
@@ -155,9 +171,8 @@ function Column({
     },
   );
 
-  const handleAddNewTask = () => {
-    const lastTask = column.tasks.at(-1);
-    console.log("lastTask", lastTask);
+  const handleSubmit = (values: z.infer<typeof addTaskSchema>) => {
+    const { title } = values;
 
     const newTaskPosition = generateKeyBetween(
       column.tasks.at(-1)?.position,
@@ -167,7 +182,7 @@ function Column({
     addTask({
       variables: {
         columnId: column.id,
-        title: "New task",
+        title,
         position: newTaskPosition,
       },
       optimisticResponse: {
@@ -176,7 +191,7 @@ function Column({
           __typename: "Task",
           id: "optimistic",
           position: newTaskPosition,
-          title: "New task",
+          title,
           column: {
             id: column.id,
           },
@@ -185,6 +200,65 @@ function Column({
     });
   };
 
+  const form = useForm<z.infer<typeof addTaskSchema>>({
+    resolver: zodResolver(addTaskSchema),
+  });
+
+  return (
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(open) => {
+          setIsOpen(open);
+        }}
+      >
+        <DialogTrigger asChild>
+          <Button
+            onClick={() => setIsOpen(true)}
+            variant="secondary"
+            className="w-full"
+            size="lg"
+          >
+            Add new task
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add new task</DialogTitle>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSubmit)}>
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Task title</FormLabel>
+                    <FormControl>
+                      <Input {...field} name="title" type="text" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit">Add task</Button>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function Column({
+  column,
+  index,
+  className,
+}: {
+  column: GetProjectQuery["project"]["columns"][number];
+  index: number;
+  className?: string;
+}) {
   return (
     <Draggable draggableId={column.id} index={index}>
       {(colDraggableProvided, snapshot) => {
@@ -193,7 +267,7 @@ function Column({
             {...colDraggableProvided.draggableProps}
             {...colDraggableProvided.dragHandleProps}
             ref={colDraggableProvided.innerRef}
-            className={cn("bg-gray-200 p-4 rounded-lg", className, {
+            className={cn("bg-gray-100 p-4 rounded-xl", className, {
               "shadow-lg scale-105": snapshot.isDragging,
               "shadow-sm scale-100": snapshot.isDropAnimating,
             })}
@@ -240,14 +314,7 @@ function Column({
                 );
               }}
             </Droppable>
-            <Button
-              onClick={handleAddNewTask}
-              variant="secondary"
-              className="w-full"
-              size="lg"
-            >
-              Add new task
-            </Button>
+            <AddTaskModal column={column} />
           </li>
         );
       }}
@@ -261,6 +328,7 @@ function ProjectComponent() {
     variables: {
       projectId,
     },
+    fetchPolicy: "cache-and-network",
   });
 
   const [updateTask] = useMutation(
@@ -285,8 +353,8 @@ function ProjectComponent() {
     }`),
   );
 
-  if (projectQuery.loading) {
-    return <div>loading...</div>;
+  if (projectQuery.loading && !projectQuery.data) {
+    return <div>Loading...</div>;
   }
 
   if (projectQuery.error) {
@@ -514,7 +582,7 @@ function ProjectComponent() {
                   <ul
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="grid grid-cols-3"
+                    className={cn("grid", `grid-cols-${sortedColumns.length}`)}
                   >
                     {sortedColumns.map((column, index) => (
                       <Column
