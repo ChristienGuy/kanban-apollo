@@ -17,25 +17,18 @@ export const GET_PROJECT = gql(`
   query GetProject($projectId: ID!) {
     project(id: $projectId) {
       __typename
+      id
       title
       columns {
         __typename
         title
         id
         position
-        project {
-          id
-          __typename
-        }
         tasks {
           __typename
           id
           title
           position
-          column {
-            __typename
-            id
-          }
         }
       }
     }

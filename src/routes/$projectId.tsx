@@ -50,11 +50,6 @@ const getSortedColumns = (columns: GetProjectQuery["project"]["columns"]) => {
     }
     return 0;
   });
-  return sortedColumns;
-};
-
-const getSortedBoard = (columns: GetProjectQuery["project"]["columns"]) => {
-  const sortedColumns = getSortedColumns(columns);
   return sortedColumns.map((column) => {
     return {
       ...column,
@@ -135,7 +130,7 @@ function Column({
 
 function ProjectComponent() {
   const { projectId } = Route.useParams();
-  const { data, error, loading } = useQuery(GET_PROJECT, {
+  const projectQuery = useQuery(GET_PROJECT, {
     variables: {
       projectId,
     },
@@ -148,27 +143,19 @@ function ProjectComponent() {
         __typename
         id
         position
-        column {
-          __typename
-          id
-          project {
-            __typename
-            id
-          }
-        }
       }
     }`),
   );
 
-  if (loading) {
+  if (projectQuery.loading) {
     return <div>loading...</div>;
   }
 
-  if (error) {
-    return <div>Error: {error.message}</div>;
+  if (projectQuery.error) {
+    return <div>Error: {projectQuery.error.message}</div>;
   }
 
-  const sortedBoard = getSortedBoard(data.project.columns);
+  const sortedColumns = getSortedColumns(projectQuery.data.project.columns);
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) {
@@ -177,10 +164,18 @@ function ProjectComponent() {
       return;
     }
 
+    if (result.type === DROPPABLE_TYPE.COLUMN) {
+      console.log("moved column");
+      // Get the future column order
+      // get the new lexical position string
+      // update the column with the new position
+      // return the optimistic result
+    }
+
     if (result.type === DROPPABLE_TYPE.TASK) {
       const droppedIndex = result.destination.index;
       const droppedColumnId = result.destination.droppableId;
-      const column = sortedBoard.find(
+      const column = sortedColumns.find(
         (column) => column.id === droppedColumnId,
       );
 
@@ -233,15 +228,95 @@ function ProjectComponent() {
             __typename: "Task",
             id: result.draggableId,
             position: newPosition,
-            column: {
-              __typename: "Column",
-              id: droppedColumnId,
-              project: {
-                __typename: "Project",
-                id: column.project.id,
+          },
+        },
+        update: (cache, { data }) => {
+          // find column that the task was moved from
+          const sourceColumn = sortedColumns.find((column) =>
+            column.tasks.find((task) => task.id === result.draggableId),
+          );
+
+          // Find the column the task was moved to
+          const targetColumn = sortedColumns.find(
+            (column) => column.id === droppedColumnId,
+          );
+          if (!sourceColumn || !targetColumn) {
+            throw new Error("Failed to find source or target column");
+          }
+          if (!data?.updateTask) {
+            throw new Error("No update response");
+          }
+
+          if (sourceColumn.id === targetColumn.id) {
+            // If source and target columns are the same, we don't need to update the cache manually
+            return;
+          }
+
+          // find the task that was moved
+          const foundTask = sourceColumn.tasks.find(
+            (task) => task.id === result.draggableId,
+          );
+
+          if (!foundTask) {
+            throw new Error("Failed to find task in source column");
+          }
+
+          const task = {
+            ...foundTask,
+            position: data.updateTask.position,
+          };
+
+          // Remove the task from the source column
+          const sourceTasks = sourceColumn.tasks.filter(
+            (task) => task.id !== result.draggableId,
+          );
+          // insert new task into the target column
+          const targetTasks = [
+            ...targetColumn.tasks.slice(0, droppedIndex),
+            task,
+            ...targetColumn.tasks.slice(droppedIndex),
+          ];
+
+          // remove the source and target columns from the list of columns
+          const filteredColumns = sortedColumns.filter(
+            (column) =>
+              column.id !== sourceColumn.id && column.id !== targetColumn.id,
+          );
+
+          const newColumns = [
+            ...filteredColumns,
+            { ...sourceColumn, tasks: sourceTasks },
+            { ...targetColumn, tasks: targetTasks },
+          ];
+
+          return cache.modify({
+            id: cache.identify(projectQuery.data.project),
+            fields: {
+              columns: () => {
+                // TODO: deal with potentially lost cache data when updating tasks
+                // consider writing new task fragments to the cache for each column
+                const newColumnsRefs = newColumns.map((column) => {
+                  return cache.writeFragment({
+                    data: column,
+                    fragment: gql(`
+                      fragment NewColumn on Column {
+                        id
+                        title
+                        position
+                        tasks {
+                          id
+                          title
+                          position
+                        }
+                      }
+                    `),
+                  });
+                });
+
+                return newColumnsRefs;
               },
             },
-          },
+          });
         },
       });
     }
@@ -249,9 +324,9 @@ function ProjectComponent() {
 
   return (
     <div>
-      {data ? (
+      {projectQuery.data ? (
         <>
-          <h1>Project: {data.project.title}</h1>
+          <h1>Project: {projectQuery.data.project.title}</h1>
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable
               droppableId="board"
@@ -265,7 +340,7 @@ function ProjectComponent() {
                     {...provided.droppableProps}
                     className="grid grid-cols-3 gap-4"
                   >
-                    {sortedBoard.map((column, index) => (
+                    {sortedColumns.map((column, index) => (
                       <Column key={column.id} column={column} index={index} />
                     ))}
                     {provided.placeholder}
