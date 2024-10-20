@@ -23,37 +23,23 @@ export const Route = createFileRoute("/$projectId")({
   component: ProjectComponent,
 });
 
-const getSortedTasks = (
-  tasks: GetProjectQuery["project"]["columns"][number]["tasks"],
-) => {
-  const sortedTasks = [...tasks];
-  sortedTasks.sort((a, b) => {
-    if (a.position < b.position) {
-      return -1;
-    }
-    if (b.position < a.position) {
-      return 1;
-    }
-    return 0;
-  });
-  return sortedTasks;
-};
+function sortByPosition<T extends { position: string }>(a: T, b: T) {
+  if (a.position < b.position) {
+    return -1;
+  }
+  if (b.position < a.position) {
+    return 1;
+  }
+  return 0;
+}
 
 const getSortedColumns = (columns: GetProjectQuery["project"]["columns"]) => {
-  const sortedColumns = [...columns];
-  sortedColumns.sort((a, b) => {
-    if (a.position < b.position) {
-      return -1;
-    }
-    if (b.position < a.position) {
-      return 1;
-    }
-    return 0;
-  });
+  const sortedColumns = [...columns].sort(sortByPosition);
   return sortedColumns.map((column) => {
+    const sortedTasks = [...column.tasks].sort(sortByPosition);
     return {
       ...column,
-      tasks: getSortedTasks(column.tasks),
+      tasks: sortedTasks,
     };
   });
 };
@@ -147,6 +133,17 @@ function ProjectComponent() {
     }`),
   );
 
+  const [updateColumn] = useMutation(
+    gql(`
+    mutation UpdateColumn($updateColumnId: String!, $position: String, $title: String) {
+      updateColumn(id: $updateColumnId, position: $position, title: $title) {
+        __typename
+        id
+        position
+      }
+    }`),
+  );
+
   if (projectQuery.loading) {
     return <div>loading...</div>;
   }
@@ -165,6 +162,50 @@ function ProjectComponent() {
     }
 
     if (result.type === DROPPABLE_TYPE.COLUMN) {
+      const columnId = result.draggableId;
+      const droppedIndex = result.destination.index;
+
+      const filteredColumns = sortedColumns.filter(
+        (column) => column.id !== columnId,
+      );
+
+      const columnsAfterDrop = [
+        ...filteredColumns.slice(0, droppedIndex),
+        {
+          id: columnId,
+          position: undefined,
+        },
+        ...filteredColumns.slice(droppedIndex),
+      ];
+
+      const previousColumnPosition = columnsAfterDrop[droppedIndex - 1]
+        ? columnsAfterDrop[droppedIndex - 1].position
+        : undefined;
+
+      const nextColumnPosition = columnsAfterDrop[droppedIndex + 1]
+        ? columnsAfterDrop[droppedIndex + 1].position
+        : undefined;
+
+      const newPosition = generateKeyBetween(
+        previousColumnPosition,
+        nextColumnPosition,
+      );
+
+      updateColumn({
+        variables: {
+          updateColumnId: columnId,
+          position: newPosition,
+        },
+        optimisticResponse: {
+          __typename: "Mutation",
+          updateColumn: {
+            __typename: "Column",
+            id: columnId,
+            position: newPosition,
+          },
+        },
+      });
+
       console.log("moved column");
       // Get the future column order
       // get the new lexical position string
