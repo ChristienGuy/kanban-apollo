@@ -29,6 +29,9 @@ export const GET_PROJECT = gql(`
           id
           title
           position
+          column {
+            id
+          }
         }
       }
     }

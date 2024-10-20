@@ -13,6 +13,13 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { generateKeyBetween } from "@/lib/order";
 import { gql } from "@/__generated__";
+import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { ContextMenuItem } from "@radix-ui/react-context-menu";
 
 enum DROPPABLE_TYPE {
   COLUMN = "COLUMN",
@@ -44,26 +51,154 @@ const getSortedColumns = (columns: GetProjectQuery["project"]["columns"]) => {
   });
 };
 
+function Task({
+  task,
+  className,
+}: {
+  task: GetProjectQuery["project"]["columns"][number]["tasks"][number];
+  className?: string;
+}) {
+  const [deleteTask] = useMutation(
+    gql(`
+    mutation DeleteTask($taskId: String!) {
+      deleteTask(id: $taskId) {
+        id
+      }
+    }
+`),
+  );
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>
+        <Card className={cn(className)}>
+          <CardHeader>{task.title}</CardHeader>
+        </Card>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem
+          onClick={() => {
+            deleteTask({
+              variables: {
+                taskId: task.id,
+              },
+              update: (cache) => {
+                cache.modify({
+                  id: cache.identify(task.column),
+                  fields: {
+                    tasks: (existingTasks, { readField }) => {
+                      const filteredTasks = existingTasks.filter(
+                        (taskRef) => task.id !== readField("id", taskRef),
+                      );
+                      return filteredTasks;
+                    },
+                  },
+                });
+              },
+            });
+          }}
+        >
+          Delete
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 function Column({
   column,
   index,
+  className,
 }: {
   column: GetProjectQuery["project"]["columns"][number];
   index: number;
+  className?: string;
 }) {
+  const [addTask] = useMutation(
+    gql(`
+    mutation AddTask($columnId: String!, $title: String!, $position: String!) {
+      createTask(columnId: $columnId, title: $title, position: $position) {
+        id
+        position
+        title
+        column {
+          id
+        },
+      }
+    }`),
+    {
+      update: (cache, { data }) => {
+        console.log("update", data);
+        cache.modify({
+          id: cache.identify(column),
+          fields: {
+            tasks: (existingTasks = []) => {
+              const newTaskRef = cache.writeFragment({
+                data: data.createTask,
+                fragment: gql(`
+                  fragment NewTask on Task {
+                    id
+                    title
+                    position
+                    column {
+                      id
+                    }
+                  }
+                `),
+              });
+
+              return [...existingTasks, newTaskRef];
+            },
+          },
+        });
+      },
+    },
+  );
+
+  const handleAddNewTask = () => {
+    const lastTask = column.tasks.at(-1);
+    console.log("lastTask", lastTask);
+
+    const newTaskPosition = generateKeyBetween(
+      column.tasks.at(-1)?.position,
+      undefined,
+    );
+
+    addTask({
+      variables: {
+        columnId: column.id,
+        title: "New task",
+        position: newTaskPosition,
+      },
+      optimisticResponse: {
+        __typename: "Mutation",
+        createTask: {
+          __typename: "Task",
+          id: "optimistic",
+          position: newTaskPosition,
+          title: "New task",
+          column: {
+            id: column.id,
+          },
+        },
+      },
+    });
+  };
+
   return (
     <Draggable draggableId={column.id} index={index}>
-      {(colDraggableProvided) => {
+      {(colDraggableProvided, snapshot) => {
         return (
           <li
             {...colDraggableProvided.draggableProps}
             {...colDraggableProvided.dragHandleProps}
             ref={colDraggableProvided.innerRef}
-            className="bg-gray-200 p-4 rounded-lg"
+            className={cn("bg-gray-200 p-4 rounded-lg", className, {
+              "shadow-lg scale-105": snapshot.isDragging,
+              "shadow-sm scale-100": snapshot.isDropAnimating,
+            })}
           >
-            <h2>
-              {column.title} - {column.position}
-            </h2>
+            <h2 className="font-medium mb-3">{column.title}</h2>
             <Droppable droppableId={column.id} type={DROPPABLE_TYPE.TASK}>
               {(colDroppableProvided) => {
                 return (
@@ -87,16 +222,14 @@ function Column({
                               ref={taskDraggableProvided.innerRef}
                               className="mb-2"
                             >
-                              <Card
+                              <Task
+                                task={task}
                                 className={cn("transition", {
                                   "shadow-lg scale-105": snapshot.isDragging,
                                   "!rotate-0 shadow-sm scale-100":
                                     snapshot.isDropAnimating,
                                 })}
-                              >
-                                <CardHeader>{task.title}</CardHeader>
-                                {task.position}
-                              </Card>
+                              />
                             </li>
                           );
                         }}
@@ -107,6 +240,14 @@ function Column({
                 );
               }}
             </Droppable>
+            <Button
+              onClick={handleAddNewTask}
+              variant="secondary"
+              className="w-full"
+              size="lg"
+            >
+              Add new task
+            </Button>
           </li>
         );
       }}
@@ -205,12 +346,6 @@ function ProjectComponent() {
           },
         },
       });
-
-      console.log("moved column");
-      // Get the future column order
-      // get the new lexical position string
-      // update the column with the new position
-      // return the optimistic result
     }
 
     if (result.type === DROPPABLE_TYPE.TASK) {
@@ -367,7 +502,7 @@ function ProjectComponent() {
     <div>
       {projectQuery.data ? (
         <>
-          <h1>Project: {projectQuery.data.project.title}</h1>
+          <h1 className="mb-8 text-3xl">{projectQuery.data.project.title}</h1>
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable
               droppableId="board"
@@ -379,10 +514,15 @@ function ProjectComponent() {
                   <ul
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="grid grid-cols-3 gap-4"
+                    className="grid grid-cols-3"
                   >
                     {sortedColumns.map((column, index) => (
-                      <Column key={column.id} column={column} index={index} />
+                      <Column
+                        className="mr-4"
+                        key={column.id}
+                        column={column}
+                        index={index}
+                      />
                     ))}
                     {provided.placeholder}
                   </ul>
